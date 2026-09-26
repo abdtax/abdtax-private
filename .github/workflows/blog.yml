@@ -1,0 +1,63 @@
+name: Blog Monitor
+
+on:
+  schedule:
+    - cron: "17 * * * *"      # 매시 17분 (한국시간 기준 1시간마다)
+  workflow_dispatch:           # Actions 화면에서 수동 실행 버튼
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      TZ: Asia/Seoul
+      STATIC_SITE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 이전 기록 불러오기
+        uses: actions/cache/restore@v4
+        with:
+          path: seen.db
+          key: seen-${{ github.run_id }}
+          restore-keys: seen-
+
+      - name: 블로그 새 글 확인
+        run: python blog_watch.py
+
+      - name: 기록 저장
+        uses: actions/cache/save@v4
+        with:
+          path: seen.db
+          key: seen-${{ github.run_id }}
+
+      - name: 자동 실행 유지 (매월 1일, 60일 무활동 시 자동 중지 방지)
+        run: |
+          if [ "$(date +%d)" = "01" ] && [ "$(date +%H)" = "03" ]; then
+            date > keepalive.txt
+            git config user.name "blog-monitor"
+            git config user.email "blog-monitor@users.noreply.github.com"
+            git add keepalive.txt && git commit -m "keepalive" && git push || true
+          fi
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
