@@ -205,12 +205,15 @@ header label{font-size:12px}header button{padding:6px 12px;border:0;border-radiu
 }
 </style></head><body>
 <header><h1>블로그 모니터</h1><div class="sub" id="sub"></div>
-<div class="sp"></div><button id="vw" style="background:#3d5a80;color:#fff">날짜순 보기</button><label><input type="checkbox" id="nw"> 새 글만</label><label><input type="checkbox" id="st2"> ★★ 이상만</label>
+<div class="sp"></div><button id="vw" style="background:#3d5a80;color:#fff">날짜순 보기</button><label><input type="checkbox" id="nw"> 오늘 새 글</label><label><input type="checkbox" id="st2"> ★★ 이상만</label>
 <input id="q" placeholder="검색 (제목·요약·카테고리)"><button id="rf" style="display:none">⟳ 새로고침</button><button id="mb" style="display:none">📱 휴대폰</button></header>
 <div id="mbox" style="display:none;background:#fffbe6;border-bottom:1px solid #e6d58a;padding:10px 14px;font-size:13px;line-height:1.7"></div>
 <div id="err"></div><div id="grid"></div><div id="list" style="display:none"></div>
 <script>
-const DATA=__DATA__;const P=DATA.posts;let q='',onlyNew=false,only2=false;
+const DATA=__DATA__;const P=DATA.posts;
+// '오늘 새 글' = 한국시간(KST) 기준 오늘 날짜에 올라온 글 (화면을 연 시점 기준으로 계산)
+const TODAY=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+P.forEach(p=>{p.new=p.d.slice(0,10)==TODAY});let q='',onlyNew=false,only2=false;
 function stars(p){if(p.st<0)return '';return '<span class="stars s'+p.st+'" title="'+esc(p.why||'특이사항 표현 없음')+'">'+'★'.repeat(p.st)+'☆'.repeat(3-p.st)+'</span> '}
 function ok(p){return (!onlyNew||p.new)&&(!only2||p.st>=2)&&(!q||(p.t+p.s+p.c).includes(q))}
 function esc(s){return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
@@ -231,13 +234,13 @@ let h='';
 DATA.blogs.forEach((b,bi)=>{const all=P.filter(p=>p.b==b.id);const nn=all.filter(p=>p.new).length;
 const L0=all.filter(ok);const lim=mobile&&!OPEN[b.id]?5:1e9;const L=L0.slice(0,lim);const rest=L0.length-L.length;
 h+='<div class="card'+(bi==0?' me':'')+'" style="'+(wide&&bi<span?'grid-row:span 2':'')+'"><div class="hd"><a target="_blank" href="https://blog.naver.com/'+b.id+'" title="블로그 열기">'+esc(b.n)+'</a>'+(nn?'<span class="nb">'+nn+'</span>':'')+'<span class="c">'+all.length+'건</span></div><div class="ls">';
-h+=L.length?L.map(p=>'<a class="it'+(p.new?' new':'')+'" target="_blank" href="'+p.u+'" title="'+esc(p.d+'\n'+p.t+(p.c?'\n['+p.c+']':'')+(p.why?'\n★ '+p.why:'')+'\n\n'+p.s)+'"><span class="d">'+p.d.slice(5,10)+'</span><span class="t">'+stars(p)+esc(p.t)+'</span></a>').join(''):'<div class="none">'+(q||onlyNew?'해당 글 없음':'최근 '+DATA.days+'일 글 없음')+'</div>';
+h+=L.length?L.map(p=>'<a class="it'+(p.new?' new':'')+'" target="_blank" href="'+p.u+'" title="'+esc(p.d+'\n'+p.t+(p.c?'\n['+p.c+']':'')+(p.why?'\n★ '+p.why:'')+'\n\n'+p.s)+'"><span class="d">'+p.d.slice(5,10)+'</span><span class="t">'+stars(p)+esc(p.t)+'</span></a>').join(''):'<div class="none">'+(q||onlyNew?(onlyNew&&!q?'오늘 새 글 없음':'해당 글 없음'):'최근 '+DATA.days+'일 글 없음')+'</div>';
 if(mobile&&(rest>0||OPEN[b.id]&&L0.length>5))h+='<button class="more" onclick="OPEN[\''+b.id+'\']=!OPEN[\''+b.id+'\'];draw()">'+(OPEN[b.id]?'접기 ▲':'+'+rest+'건 더보기 ▼')+'</button>';
 h+='</div></div>'});
 document.getElementById('grid').innerHTML=h}
 function drawList(){let d='',h='';const me=DATA.blogs.length?DATA.blogs[0].id:'';
 P.filter(ok).forEach(p=>{const dy=p.d.slice(0,10);if(dy!=d){h+='<div class="day">'+dy+'</div>';d=dy}
-h+='<a class="row'+(p.new?' new':'')+(p.b==me?' me':'')+'" target="_blank" href="'+p.u+'" title="'+esc(p.s)+'"><span class="who">'+esc(p.n)+'</span><span class="tm">'+p.d.slice(11)+'</span><span class="tt">'+(p.new?'<b style="color:#e8453c">NEW </b>':'')+stars(p)+esc(p.t)+(p.c?'<span class="cat">['+esc(p.c)+']</span>':'')+'</span></a>'});
+h+='<a class="row'+(p.new?' new':'')+(p.b==me?' me':'')+'" target="_blank" href="'+p.u+'" title="'+esc(p.s)+'"><span class="who">'+esc(p.n)+'</span><span class="tm">'+p.d.slice(11)+'</span><span class="tt">'+(p.new?'<b style="color:#e8453c">오늘 </b>':'')+stars(p)+esc(p.t)+(p.c?'<span class="cat">['+esc(p.c)+']</span>':'')+'</span></a>'});
 document.getElementById('list').innerHTML=h||'<div style="text-align:center;color:#999;padding:50px">해당 글 없음</div>'}
 document.getElementById('vw').onclick=e=>{view=view=='grid'?'list':'grid';e.target.textContent=view=='grid'?'날짜순 보기':'블로그별 보기';draw()};
 document.getElementById('q').oninput=e=>{q=e.target.value.trim();draw()};
