@@ -190,6 +190,18 @@ header label{font-size:12px}header button{padding:6px 12px;border:0;border-radiu
 #list .me .who{background:#e8453c}#list .tm{flex:0 0 40px;color:#888;font-size:12px}#list .tt{font-size:14px}#list .cat{color:#999;font-size:12px;margin-left:6px}
 #list .new .tt{font-weight:bold}
 
+
+@media(max-width:700px){
+ html,body{height:auto}body{display:block}
+ header{position:sticky;top:0;z-index:5}
+ #grid{overflow:visible!important;grid-auto-rows:360px}
+ .card .ls{-webkit-overflow-scrolling:touch}
+ #list{padding:8px 10px 30px}
+ #list .row{flex-wrap:wrap;gap:4px 8px;padding:8px 10px}
+ #list .who{flex:0 0 auto;padding:2px 8px}
+ #list .tm{flex:0 0 auto}
+ #list .tt{flex:1 1 100%;font-size:14px;line-height:1.45}
+}
 </style></head><body>
 <header><h1>블로그 모니터</h1><div class="sub" id="sub"></div>
 <div class="sp"></div><button id="vw" style="background:#3d5a80;color:#fff">날짜순 보기</button><label><input type="checkbox" id="nw"> 새 글만</label><label><input type="checkbox" id="st2"> ★★ 이상만</label>
@@ -208,11 +220,12 @@ function draw(){document.getElementById('grid').style.display=view=='grid'?'grid
 if(view=='list')return drawList();
 // 빈칸 없는 배치: 창 너비로 칸 수를 정하고, 남는 칸만큼 앞쪽 블로그(내 블로그부터)를 세로 2칸으로 늘림
 const n=DATA.blogs.length, W=window.innerWidth, g=document.getElementById('grid');
+const mobile=W<700;
 let cols=Math.max(2,Math.min(7,Math.floor(W/185)));
 if(n<=14&&W>=1300)cols=Math.ceil(n/2);
-const rows=Math.ceil(n/cols), span=Math.min(rows*cols-n, cols-1), wide=rows>=2;
+const rows=Math.ceil(n/cols), span=mobile?0:Math.min(rows*cols-n, cols-1), wide=rows>=2;
 g.style.gridTemplateColumns='repeat('+cols+',minmax(0,1fr))';
-g.style.gridTemplateRows='repeat('+rows+',minmax(230px,1fr))';g.style.overflow='auto';
+if(mobile){g.style.gridTemplateRows='';g.style.overflow='';}else{g.style.gridTemplateRows='repeat('+rows+',minmax(230px,1fr))';g.style.overflow='auto';}
 let h='';
 DATA.blogs.forEach((b,bi)=>{const all=P.filter(p=>p.b==b.id);const nn=all.filter(p=>p.new).length;
 const L=all.filter(ok);
