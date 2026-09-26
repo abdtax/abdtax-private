@@ -194,8 +194,9 @@ header label{font-size:12px}header button{padding:6px 12px;border:0;border-radiu
 @media(max-width:700px){
  html,body{height:auto}body{display:block}
  header{position:sticky;top:0;z-index:5}
- #grid{overflow:visible!important;grid-auto-rows:360px}
- .card .ls{-webkit-overflow-scrolling:touch}
+ #grid{overflow:visible!important;grid-auto-rows:auto}
+ .card{min-height:0}.card .ls{overflow:visible;flex:none}
+ .more{display:block;margin-top:auto;width:100%;border:0;border-top:1px solid #e3e7ed;background:#f7f9fc;color:#1f3a5f;font-size:13px;padding:9px;cursor:pointer}
  #list{padding:8px 10px 30px}
  #list .row{flex-wrap:wrap;gap:4px 8px;padding:8px 10px}
  #list .who{flex:0 0 auto;padding:2px 8px}
@@ -215,7 +216,7 @@ function ok(p){return (!onlyNew||p.new)&&(!only2||p.st>=2)&&(!q||(p.t+p.s+p.c).i
 function esc(s){return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
 document.getElementById('sub').textContent='최근 '+DATA.days+'일 · 갱신 '+DATA.updated;
 if(DATA.errors.length)document.getElementById('err').innerHTML='<div class="err">확인 실패: '+DATA.errors.map(esc).join(' / ')+'</div>';
-let view='grid';
+let view='grid';const OPEN={};
 function draw(){document.getElementById('grid').style.display=view=='grid'?'grid':'none';document.getElementById('list').style.display=view=='list'?'block':'none';
 if(view=='list')return drawList();
 // 빈칸 없는 배치: 창 너비로 칸 수를 정하고, 남는 칸만큼 앞쪽 블로그(내 블로그부터)를 세로 2칸으로 늘림
@@ -228,9 +229,10 @@ g.style.gridTemplateColumns='repeat('+cols+',minmax(0,1fr))';
 if(mobile){g.style.gridTemplateRows='';g.style.overflow='';}else{g.style.gridTemplateRows='repeat('+rows+',minmax(230px,1fr))';g.style.overflow='auto';}
 let h='';
 DATA.blogs.forEach((b,bi)=>{const all=P.filter(p=>p.b==b.id);const nn=all.filter(p=>p.new).length;
-const L=all.filter(ok);
+const L0=all.filter(ok);const lim=mobile&&!OPEN[b.id]?5:1e9;const L=L0.slice(0,lim);const rest=L0.length-L.length;
 h+='<div class="card'+(bi==0?' me':'')+'" style="'+(wide&&bi<span?'grid-row:span 2':'')+'"><div class="hd"><a target="_blank" href="https://blog.naver.com/'+b.id+'" title="블로그 열기">'+esc(b.n)+'</a>'+(nn?'<span class="nb">'+nn+'</span>':'')+'<span class="c">'+all.length+'건</span></div><div class="ls">';
 h+=L.length?L.map(p=>'<a class="it'+(p.new?' new':'')+'" target="_blank" href="'+p.u+'" title="'+esc(p.d+'\n'+p.t+(p.c?'\n['+p.c+']':'')+(p.why?'\n★ '+p.why:'')+'\n\n'+p.s)+'"><span class="d">'+p.d.slice(5,10)+'</span><span class="t">'+stars(p)+esc(p.t)+'</span></a>').join(''):'<div class="none">'+(q||onlyNew?'해당 글 없음':'최근 '+DATA.days+'일 글 없음')+'</div>';
+if(mobile&&(rest>0||OPEN[b.id]&&L0.length>5))h+='<button class="more" onclick="OPEN[\''+b.id+'\']=!OPEN[\''+b.id+'\'];draw()">'+(OPEN[b.id]?'접기 ▲':'+'+rest+'건 더보기 ▼')+'</button>';
 h+='</div></div>'});
 document.getElementById('grid').innerHTML=h}
 function drawList(){let d='',h='';const me=DATA.blogs.length?DATA.blogs[0].id:'';
