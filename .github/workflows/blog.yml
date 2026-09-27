@@ -46,6 +46,28 @@ jobs:
           path: seen.db
           key: seen-${{ github.run_id }}
 
+      - name: 해석례 기록 불러오기
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            nts_seen.json
+            nts_detail.json
+          key: nts-${{ github.run_id }}
+          restore-keys: nts-
+
+      - name: 국세법령정보시스템 새 해석례 확인
+        continue-on-error: true      # 국세청 접속 실패해도 블로그 모니터는 정상 배포
+        run: python nts_watch.py
+
+      - name: 해석례 기록 저장
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            nts_seen.json
+            nts_detail.json
+          key: nts-${{ github.run_id }}
+
       - name: 자동 실행 유지 (매월 1일, 60일 무활동 시 자동 중지 방지)
         run: |
           if [ "$(date +%d)" = "01" ] && [ "$(date +%H)" = "03" ]; then
