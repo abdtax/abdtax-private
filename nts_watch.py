@@ -355,8 +355,7 @@ main{max-width:1100px;margin:0 auto;padding:6px 12px 40px}
 #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#222;color:#fff;padding:8px 14px;border-radius:18px;font-size:13px;display:none;z-index:9}
 @media(max-width:600px){header h1{font-size:15px}.dt{margin-left:0;width:100%}.tt{font-size:13.5px}}
 </style></head><body>
-<header><h1>새 해석례·판례 모니터</h1><span class="m">등록일 기준 최근 __DAYS__일 · 확인 __RUN__</span>
-<a href="./">블로그 모니터 →</a></header>
+<header><h1>새 해석례·판례 모니터</h1><span class="m">등록일 기준 최근 __DAYS__일 · 확인 __RUN__</span></header>
 __WARN__
 <div class="tabs"><div class="tab on" data-k="rul">해석례<span class="n" id="n_rul"></span></div><div class="tab" data-k="prec">판례·결정례<span class="n" id="n_prec"></span></div><div class="tab" data-k="saved">★ 보관함<span class="n" id="n_saved"></span></div></div>
 <div class="sb" id="sb"></div>
@@ -394,7 +393,7 @@ if(q.a=='put')await api('/put',{id:q.id,item:q.item});else if(q.a=='del')await a
 SQ.shift();LS.s('nts_sbq',SQ)}if(SST!='ok'){SST='ok';SLAST=new Date().toTimeString().slice(0,5)}}catch(e){if(SST!='key')SST='off'}FL=false;sbBar()}
 async function sync(first){if(!SKEY){sbBar();return}try{
 if(!LS.g('nts_sbinit',false)){const loc=Object.values(SV);const j=await api('/bulk',{items:loc});LS.s('nts_sbinit',true);if(loc.length)toast('이 기기 보관함 '+loc.length+'건을 서버와 합쳤습니다')}
-await flush();if(SST=='key')throw 0;const j=await api('/list');const n={};j.items.forEach(x=>{n[x.id]=x});
+await flush();if(SST=='key')throw 0;const j=await api('/list');const n={};j.items.forEach(x=>{if(String(x.id).startsWith('blog:'))return;n[x.id]=x});
 SQ.forEach(q=>{if(q.a=='put')n[q.id]=Object.assign({},q.item,{id:q.id});if(q.a=='del')delete n[q.id];if(q.a=='memo'&&n[q.id])n[q.id].memo=q.memo});
 SV=n;keep();SST='ok';SLAST=new Date().toTimeString().slice(0,5)}catch(e){if(SST!='key')SST='off'}
 counts();sbBar();if(!document.activeElement||!document.activeElement.classList.contains('memo'))draw()}

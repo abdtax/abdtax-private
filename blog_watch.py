@@ -137,7 +137,7 @@ def main(open_browser=True, fetch_new=True):
     blog_list = [dict(id=bid, n=n) for bid, n in blogs]
 
     page = TEMPLATE.replace("__DATA__", json.dumps(dict(posts=posts, blogs=blog_list, days=DAYS,
-                                                           cutoff=cutoff[:10], updated=stamp, errors=errors, static=bool(os.environ.get("STATIC_SITE")),
+                                                           cutoff=cutoff[:10], updated=stamp, sb=os.environ.get("SAVEBOX_URL", "https://13-125-115-202.sslip.io/savebox"), errors=errors, static=bool(os.environ.get("STATIC_SITE")),
                                                            first=first_run), ensure_ascii=False).replace("</", "<\\/"))
     if os.environ.get("STATIC_SITE"):                  # 깃허브 자동 실행: site/index.html 로 출력
         os.makedirs("site", exist_ok=True)
@@ -203,25 +203,81 @@ header label{font-size:12px}header button{padding:6px 12px;border:0;border-radiu
  #list .tm{flex:0 0 auto}
  #list .tt{flex:1 1 100%;font-size:14px;line-height:1.45}
 }
+.pin{flex:0 0 14px;color:#c9ced6;cursor:pointer;font-size:13px;line-height:1.2}.pin.on{color:#f0a500}.pin:hover{color:#f0a500}
+#list .pin{flex:0 0 16px}
+.sb{background:#f4f7fb;border-bottom:1px solid #d9dee6;padding:7px 14px;font-size:12.5px;color:#445;display:none;align-items:center;flex-wrap:wrap;gap:6px 10px}.sb.on{display:flex}.sb button{border:1px solid #c9d0da;background:#fff;color:#1f3a5f;border-radius:6px;padding:4px 9px;font-size:12px;cursor:pointer}.sb .ok{color:#2e7d32;font-weight:bold}.sb .bad{color:#e8453c;font-weight:bold}
+#saved{flex:1;overflow:auto;padding:10px 22px 30px}
+#saved .sv{background:#fff;border-radius:6px;padding:9px 12px;margin:6px 0;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+#saved .top{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-size:12px;color:#888}
+#saved .who{background:#6b7c93;color:#fff;border-radius:4px;font-size:11px;padding:2px 6px}
+#saved a.tt{display:block;font-weight:bold;font-size:14px;color:#1f3a5f;margin:4px 0 2px;text-decoration:none}
+#saved .s{font-size:12.5px;color:#444;line-height:1.5}
+#saved .acts{display:flex;gap:6px;margin-top:6px}#saved .acts button{border:1px solid #c9d0da;background:#fff;color:#1f3a5f;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer}
+#saved .acts .un{background:#fff7e0;border-color:#f0c14b;color:#8a5a00}
+#saved textarea{width:100%;margin-top:6px;min-height:46px;border:1px solid #c9d0da;border-radius:6px;padding:6px;font:13px 'Malgun Gothic',sans-serif}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#222;color:#fff;padding:8px 14px;border-radius:18px;font-size:13px;display:none;z-index:9}
+@media(max-width:700px){#saved{padding:8px 10px 30px}}
 </style></head><body>
 <header><h1>블로그 모니터</h1><div class="sub" id="sub"></div>
-<div class="sp"></div><button id="vw" style="background:#3d5a80;color:#fff">날짜순 보기</button><label><input type="checkbox" id="nw"> 오늘 새 글</label><label><input type="checkbox" id="st2"> ★★ 이상만</label>
+<div class="sp"></div><button id="svb" style="background:#f0c14b;color:#5a3d00">★ 보관함 <span id="nsv"></span></button><button id="vw" style="background:#3d5a80;color:#fff">날짜순 보기</button><label><input type="checkbox" id="nw"> 오늘 새 글</label><label><input type="checkbox" id="st2"> ★★ 이상만</label>
 <input id="q" placeholder="검색 (제목·요약·카테고리)"><button id="rf" style="display:none">⟳ 새로고침</button><button id="mb" style="display:none">📱 휴대폰</button></header>
 <div id="mbox" style="display:none;background:#fffbe6;border-bottom:1px solid #e6d58a;padding:10px 14px;font-size:13px;line-height:1.7"></div>
-<div id="err"></div><div id="grid"></div><div id="list" style="display:none"></div>
+<div id="err"></div><div class="sb" id="sb"></div><div id="grid"></div><div id="list" style="display:none"></div><div id="saved" style="display:none"></div><div id="toast"></div>
 <script>
 const DATA=__DATA__;const P=DATA.posts;
 // '오늘 새 글' = 한국시간(KST) 기준 오늘 날짜에 올라온 글 (화면을 연 시점 기준으로 계산)
 const TODAY=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 P.forEach(p=>{p.new=p.d.slice(0,10)==TODAY});let q='',onlyNew=false,only2=false;
+// ── ★ 보관함 (서버 영구 보관, PC·휴대폰 공유. 예규 모니터와 같은 열쇠 사용) ──
+const SB=DATA.sb||'';const KID=u=>'blog:'+u;
+const LS={g(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},s(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let SV=LS.g('blog_saved',{}),SQ=LS.g('blog_sbq',[]),SKEY=LS.g('nts_sbkey',''),SST='',SLAST='';
+const DEV=(/Mobi|Android|iPhone/.test(navigator.userAgent)?'mobile':'pc');
+function keep(){LS.s('blog_saved',SV)}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',1800)}
+async function api(path,body){const o={method:body?'POST':'GET',headers:{'X-Key':SKEY,'X-Dev':DEV}};if(body){o.headers['Content-Type']='application/json';o.body=JSON.stringify(body)}
+const r=await fetch(SB+path,o);if(r.status==401){SST='key';throw new Error('key')}if(!r.ok)throw new Error('http');return r.json()}
+function sbBar(){const e=document.getElementById('sb');e.classList.toggle('on',view=='saved');document.getElementById('nsv').textContent=Object.keys(SV).length||'';
+let h;if(!SKEY)h='<span class="bad">● 이 기기에만 저장 중</span><span>PC·휴대폰 공유와 영구 보관을 하려면 서버 보관함에 연결하세요.</span><button id="sbc">보관함 연결</button>';
+else if(SST=='key')h='<span class="bad">● 열쇠가 맞지 않습니다</span><button id="sbc">열쇠 다시 입력</button>';
+else if(SST=='off')h='<span class="bad">● 서버 연결 안 됨</span><span>이 기기에 임시 저장 중'+(SQ.length?' (서버 반영 대기 '+SQ.length+'건)':'')+'</span><button id="sbr">다시 연결</button>';
+else if(SST=='ok')h='<span class="ok">● 서버 보관함 연결됨</span><span>PC·휴대폰 공유 · '+Object.keys(SV).length+'건 · 동기화 '+SLAST+'</span><button id="sbr">새로고침</button><button id="sbx">연결 해제</button>';
+else h='<span>서버 보관함 확인 중…</span>';
+e.innerHTML=h;const c=document.getElementById('sbc'),r=document.getElementById('sbr'),x=document.getElementById('sbx');
+if(c)c.onclick=()=>{const k=(prompt('보관함 열쇠를 입력하세요 (서버 설치 때 받은 값)')||'').trim();if(k){SKEY=k;LS.s('nts_sbkey',k);SST='';sbBar();sync()}};
+if(r)r.onclick=()=>sync();if(x)x.onclick=()=>{if(confirm('이 기기의 서버 연결을 해제할까요? (서버 보관함 내용은 그대로 남습니다)')){SKEY='';LS.s('nts_sbkey','');SST='';sbBar()}}}
+function queue(op){SQ=SQ.filter(o=>!(o.id==op.id&&(op.a!='memo'||o.a=='memo')));SQ.push(op);LS.s('blog_sbq',SQ);flush()}
+let FL=false;async function flush(){if(!SKEY||FL)return;FL=true;try{while(SQ.length){const o=SQ[0];
+if(o.a=='put')await api('/put',{id:o.id,item:o.item});else if(o.a=='del')await api('/del',{id:o.id});else if(o.a=='memo')await api('/memo',{id:o.id,memo:o.memo});
+SQ.shift();LS.s('blog_sbq',SQ)}if(SST!='ok'){SST='ok';SLAST=new Date().toTimeString().slice(0,5)}}catch(e){if(SST!='key')SST='off'}FL=false;sbBar()}
+async function sync(){if(!SKEY){sbBar();return}try{
+if(!LS.g('blog_sbinit',false)){const loc=Object.values(SV);await api('/bulk',{items:loc});LS.s('blog_sbinit',true);if(loc.length)toast('이 기기 보관함 '+loc.length+'건을 서버와 합쳤습니다')}
+await flush();if(SST=='key')throw 0;const j=await api('/list');const n={};j.items.forEach(x=>{if(String(x.id).startsWith('blog:'))n[x.id]=x});
+SQ.forEach(o=>{if(o.a=='put')n[o.id]=Object.assign({},o.item,{id:o.id});if(o.a=='del')delete n[o.id];if(o.a=='memo'&&n[o.id])n[o.id].memo=o.memo});
+SV=n;keep();SST='ok';SLAST=new Date().toTimeString().slice(0,5)}catch(e){if(SST!='key')SST='off'}
+sbBar();if(!document.activeElement||document.activeElement.tagName!='TEXTAREA')draw()}
+const PU={};P.forEach(p=>{PU[p.u]=p});
+function pin(p){const on=!!SV[KID(p.u)];return '<span class="pin'+(on?' on':'')+'" data-u="'+esc(p.u)+'" title="'+(on?'보관됨 (누르면 해제)':'보관함에 저장')+'">'+(on?'★':'☆')+'</span>'}
+function toggle(u){const k=KID(u);if(SV[k]){const x=SV[k];if(!confirm('보관을 해제할까요?\n\n['+(x.n||'')+'] '+(x.t||'')+'\n\n해제하면 PC·휴대폰 보관함에서 모두 빠지고, 이 글에 쓴 메모도 보관함에서 사라집니다.'))return;delete SV[k];queue({a:'del',id:k});toast('보관 해제')}
+else{const p=PU[u];if(!p)return;SV[k]={id:k,src:'blog',b:p.b,n:p.n,t:p.t,d:p.d,c:p.c,s:p.s,u:p.u,savedAt:TODAY,memo:''};queue({a:'put',id:k,item:SV[k]});toast(SKEY?'보관함에 저장 (PC·휴대폰 공유)':'이 기기 보관함에 저장')}
+keep();sbBar();draw()}
+document.addEventListener('click',e=>{const s=e.target.closest('.pin');if(s){e.preventDefault();e.stopPropagation();toggle(s.dataset.u)}},true);
+const MT={};function memoLater(k,v){clearTimeout(MT[k]);MT[k]=setTimeout(()=>queue({a:'memo',id:k,memo:v}),800)}
+function drawSaved(){const L=Object.values(SV).filter(x=>!q||(x.t+x.s+x.c+x.n+(x.memo||'')).includes(q)).sort((a,b)=>(b.d||'').localeCompare(a.d||''));
+document.getElementById('saved').innerHTML=L.length?L.map(x=>'<div class="sv" data-k="'+esc(x.id)+'"><div class="top"><span class="who">'+esc(x.n)+'</span><span>'+esc((x.d||'').slice(0,16))+'</span>'+(x.c?'<span>['+esc(x.c)+']</span>':'')+'<span style="margin-left:auto">보관 '+esc(x.savedAt||'')+'</span></div>'
++'<a class="tt" target="_blank" href="'+esc(x.u)+'">'+esc(x.t)+'</a><div class="s">'+esc(x.s||'')+'</div>'
++'<textarea placeholder="메모 (보관함에 함께 저장)">'+esc(x.memo||'')+'</textarea><div class="acts"><button class="op">원문 열기</button><button class="un">★ 보관 해제</button></div></div>').join(''):'<div style="text-align:center;color:#999;padding:50px">'+(q?'해당 글 없음':'보관한 글 없음 · 글 제목 앞의 ☆를 누르면 보관됩니다')+'</div>';
+document.querySelectorAll('#saved .sv').forEach(el=>{const k=el.dataset.k,x=SV[k];
+el.querySelector('.op').onclick=()=>window.open(x.u,'_blank');el.querySelector('.un').onclick=()=>toggle(x.u);
+const m=el.querySelector('textarea');m.oninput=()=>{x.memo=m.value;keep();memoLater(k,m.value)}})}
 function stars(p){if(p.st<0)return '';return '<span class="stars s'+p.st+'" title="'+esc(p.why||'특이사항 표현 없음')+'">'+'★'.repeat(p.st)+'☆'.repeat(3-p.st)+'</span> '}
 function ok(p){return (!onlyNew||p.new)&&(!only2||p.st>=2)&&(!q||(p.t+p.s+p.c).includes(q))}
 function esc(s){return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
 document.getElementById('sub').textContent='최근 '+DATA.days+'일 · 갱신 '+DATA.updated;
 if(DATA.errors.length)document.getElementById('err').innerHTML='<div class="err">확인 실패: '+DATA.errors.map(esc).join(' / ')+'</div>';
 let view='grid';const OPEN={};
-function draw(){document.getElementById('grid').style.display=view=='grid'?'grid':'none';document.getElementById('list').style.display=view=='list'?'block':'none';
-if(view=='list')return drawList();
+function draw(){document.getElementById('grid').style.display=view=='grid'?'grid':'none';document.getElementById('list').style.display=view=='list'?'block':'none';document.getElementById('saved').style.display=view=='saved'?'block':'none';
+if(view=='saved')return drawSaved();if(view=='list')return drawList();
 // 빈칸 없는 배치: 창 너비로 칸 수를 정하고, 남는 칸만큼 앞쪽 블로그(내 블로그부터)를 세로 2칸으로 늘림
 const n=DATA.blogs.length, W=window.innerWidth, g=document.getElementById('grid');
 const mobile=W<700;
@@ -234,20 +290,21 @@ let h='';
 DATA.blogs.forEach((b,bi)=>{const all=P.filter(p=>p.b==b.id);const nn=all.filter(p=>p.new).length;
 const L0=all.filter(ok);const lim=mobile&&!OPEN[b.id]?5:1e9;const L=L0.slice(0,lim);const rest=L0.length-L.length;
 h+='<div class="card'+(bi==0?' me':'')+'" style="'+(wide&&bi<span?'grid-row:span 2':'')+'"><div class="hd"><a target="_blank" href="https://blog.naver.com/'+b.id+'" title="블로그 열기">'+esc(b.n)+'</a>'+(nn?'<span class="nb">'+nn+'</span>':'')+'<span class="c">'+all.length+'건</span></div><div class="ls">';
-h+=L.length?L.map(p=>'<a class="it'+(p.new?' new':'')+'" target="_blank" href="'+p.u+'" title="'+esc(p.d+'\n'+p.t+(p.c?'\n['+p.c+']':'')+(p.why?'\n★ '+p.why:'')+'\n\n'+p.s)+'"><span class="d">'+p.d.slice(5,10)+'</span><span class="t">'+stars(p)+esc(p.t)+'</span></a>').join(''):'<div class="none">'+(q||onlyNew?(onlyNew&&!q?'오늘 새 글 없음':'해당 글 없음'):'최근 '+DATA.days+'일 글 없음')+'</div>';
+h+=L.length?L.map(p=>'<a class="it'+(p.new?' new':'')+'" target="_blank" href="'+p.u+'" title="'+esc(p.d+'\n'+p.t+(p.c?'\n['+p.c+']':'')+(p.why?'\n★ '+p.why:'')+'\n\n'+p.s)+'">'+pin(p)+'<span class="d">'+p.d.slice(5,10)+'</span><span class="t">'+stars(p)+esc(p.t)+'</span></a>').join(''):'<div class="none">'+(q||onlyNew?(onlyNew&&!q?'오늘 새 글 없음':'해당 글 없음'):'최근 '+DATA.days+'일 글 없음')+'</div>';
 if(mobile&&(rest>0||OPEN[b.id]&&L0.length>5))h+='<button class="more" onclick="OPEN[\''+b.id+'\']=!OPEN[\''+b.id+'\'];draw()">'+(OPEN[b.id]?'접기 ▲':'+'+rest+'건 더보기 ▼')+'</button>';
 h+='</div></div>'});
 document.getElementById('grid').innerHTML=h}
 function drawList(){let d='',h='';const me=DATA.blogs.length?DATA.blogs[0].id:'';
 P.filter(ok).forEach(p=>{const dy=p.d.slice(0,10);if(dy!=d){h+='<div class="day">'+dy+'</div>';d=dy}
-h+='<a class="row'+(p.new?' new':'')+(p.b==me?' me':'')+'" target="_blank" href="'+p.u+'" title="'+esc(p.s)+'"><span class="who">'+esc(p.n)+'</span><span class="tm">'+p.d.slice(11)+'</span><span class="tt">'+(p.new?'<b style="color:#e8453c">오늘 </b>':'')+stars(p)+esc(p.t)+(p.c?'<span class="cat">['+esc(p.c)+']</span>':'')+'</span></a>'});
+h+='<a class="row'+(p.new?' new':'')+(p.b==me?' me':'')+'" target="_blank" href="'+p.u+'" title="'+esc(p.s)+'">'+pin(p)+'<span class="who">'+esc(p.n)+'</span><span class="tm">'+p.d.slice(11)+'</span><span class="tt">'+(p.new?'<b style="color:#e8453c">오늘 </b>':'')+stars(p)+esc(p.t)+(p.c?'<span class="cat">['+esc(p.c)+']</span>':'')+'</span></a>'});
 document.getElementById('list').innerHTML=h||'<div style="text-align:center;color:#999;padding:50px">해당 글 없음</div>'}
-document.getElementById('vw').onclick=e=>{view=view=='grid'?'list':'grid';e.target.textContent=view=='grid'?'날짜순 보기':'블로그별 보기';draw()};
+let lastView='grid';document.getElementById('vw').onclick=e=>{view=(view=='grid'?'list':'grid');lastView=view;e.target.textContent=view=='grid'?'날짜순 보기':'블로그별 보기';sbBar();draw()};
+document.getElementById('svb').onclick=()=>{view=view=='saved'?lastView:'saved';document.getElementById('svb').firstChild.textContent=view=='saved'?'← 목록으로 ':'★ 보관함 ';sbBar();draw()};
 document.getElementById('q').oninput=e=>{q=e.target.value.trim();draw()};
 window.addEventListener('resize',()=>{clearTimeout(window._rt);window._rt=setTimeout(draw,150)});
 document.getElementById('nw').onchange=e=>{onlyNew=e.target.checked;draw()};
 document.getElementById('st2').onchange=e=>{only2=e.target.checked;draw()};
-draw();
+draw();sbBar();sync();document.addEventListener('visibilitychange',()=>{if(document.visibilityState=='visible')sync()});window.addEventListener('online',()=>sync());
 if(location.protocol.startsWith('http')&&!DATA.static){const rf=document.getElementById('rf');rf.style.display='inline-block';
 rf.onclick=async()=>{rf.disabled=true;rf.textContent='확인 중…';try{await fetch('/refresh');}catch(e){}location.reload()};
 setInterval(()=>fetch('/ping').catch(()=>{}),20000);
