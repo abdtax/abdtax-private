@@ -25,6 +25,7 @@ MAX_DETAIL = 500               # 한 번 실행에 새로 받을 본문 최대 �
 STATIC = os.environ.get("STATIC_SITE") == "1"
 OUT = os.path.join("site", "nts.html") if STATIC else "nts_watch.html"
 OUT_JS = os.path.join(os.path.dirname(OUT), "nts_detail.js")
+SAVEBOX = os.environ.get("SAVEBOX_URL", "https://13-125-115-202.sslip.io/savebox")   # 보관함 서버 (PC·휴대폰 공유)
 DATE_FMTS = ["%Y%m%d", "%Y-%m-%d", "%Y.%m.%d"]
 
 
@@ -350,6 +351,7 @@ main{max-width:1100px;margin:0 auto;padding:6px 12px 40px}
 .acts button.sv{background:#fff7e0;border-color:#f0c14b;color:#8a5a00}.star{color:#f0a500;font-size:13px}
 .memo{width:100%;margin-top:6px;min-height:52px;border:1px solid #c9d0da;border-radius:6px;padding:6px;font:13px 'Malgun Gothic',sans-serif}
 .exp{margin-left:auto}.exp button{border:0;background:#1f3a5f;color:#fff;border-radius:6px;padding:6px 10px;font-size:12.5px;cursor:pointer}
+.sb{background:#f4f7fb;border-bottom:1px solid #d9dee6;padding:7px 14px;font-size:12.5px;color:#445;display:none;align-items:center;flex-wrap:wrap;gap:6px 10px}.sb.on{display:flex}.sb b{color:#1f3a5f}.sb button{border:1px solid #c9d0da;background:#fff;color:#1f3a5f;border-radius:6px;padding:4px 9px;font-size:12px;cursor:pointer}.sb .ok{color:#2e7d32;font-weight:bold}.sb .bad{color:#e8453c;font-weight:bold}
 #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#222;color:#fff;padding:8px 14px;border-radius:18px;font-size:13px;display:none;z-index:9}
 @media(max-width:600px){header h1{font-size:15px}.dt{margin-left:0;width:100%}.tt{font-size:13.5px}}
 </style></head><body>
@@ -357,6 +359,7 @@ main{max-width:1100px;margin:0 auto;padding:6px 12px 40px}
 <a href="./">블로그 모니터 →</a></header>
 __WARN__
 <div class="tabs"><div class="tab on" data-k="rul">해석례<span class="n" id="n_rul"></span></div><div class="tab" data-k="prec">판례·결정례<span class="n" id="n_prec"></span></div><div class="tab" data-k="saved">★ 보관함<span class="n" id="n_saved"></span></div></div>
+<div class="sb" id="sb"></div>
 <div class="bar">
 <span class="chip on" data-p="0">전체 __DAYS__일</span><span class="chip" data-p="14">2주</span><span class="chip" data-p="7">1주</span><span class="chip" data-p="-1">오늘 새로 뜸</span>
 <select id="ty"><option value="">유형 전체</option></select><select id="tx"><option value="">세목 전체</option></select>
@@ -369,8 +372,33 @@ const D=__DATA__,TODAY="__TODAY__",DT=window.DT||{};
 const LINK=x=>x.id[0]=='M'?'':'https://taxlaw.nts.go.kr/'+(x.kind=='prec'?'pd/USEPDA002P':'qt/USEQTA002P')+'.do?ntstDcmId='+x.id;
 D.forEach(x=>{const d=DT[x.id]||{};x.f=d.f||'';x.q=d.q||'';x.o=d.o||'';x.x=d.x||'';x.err=d.err||''});
 const COL={"사전답변":"#2e7d32","질의회신":"#1f3a5f","과세기준자문":"#7b3fa0","고시서면질의":"#6b7c93","법제처해석례":"#b35c00","세법해석정비":"#e8453c","과세적부":"#5d4037","이의신청":"#6d6d2e","심사청구":"#8a6d00","심판청구":"#b35c00","판례":"#0b6e6e","헌재":"#4a148c"};
-let SV={};try{SV=JSON.parse(localStorage.getItem('nts_saved')||'{}')}catch(e){}
-function keep(){try{localStorage.setItem('nts_saved',JSON.stringify(SV))}catch(e){toast('이 브라우저에서는 보관이 저장되지 않습니다')}}
+const SB='__SAVEBOX__';
+const LS={g(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},s(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let SV=LS.g('nts_saved',{}),SQ=LS.g('nts_sbq',[]),SKEY=LS.g('nts_sbkey',''),SST='',SLAST='';
+const DEV=(/Mobi|Android|iPhone/.test(navigator.userAgent)?'mobile':'pc');
+function keep(){LS.s('nts_saved',SV)}
+async function api(path,body){const o={method:body?'POST':'GET',headers:{'X-Key':SKEY,'X-Dev':DEV}};if(body){o.headers['Content-Type']='application/json';o.body=JSON.stringify(body)}
+const r=await fetch(SB+path,o);if(r.status==401){SST='key';throw new Error('열쇠 오류')}if(!r.ok)throw new Error('서버 '+r.status);return r.json()}
+function sbBar(){const e=$('#sb');if(!e)return;e.classList.toggle('on',K=='saved');
+let h;if(!SKEY)h='<span class="bad">● 이 기기에만 저장 중</span><span>PC·휴대폰 공유와 영구 보관을 하려면 서버 보관함에 연결하세요.</span><button id="sbc">보관함 연결</button>';
+else if(SST=='key')h='<span class="bad">● 열쇠가 맞지 않습니다</span><button id="sbc">열쇠 다시 입력</button>';
+else if(SST=='off')h='<span class="bad">● 서버 연결 안 됨</span><span>이 기기에 임시 저장 중'+(SQ.length?' (서버 반영 대기 '+SQ.length+'건)':'')+'</span><button id="sbr">다시 연결</button>';
+else if(SST=='ok')h='<span class="ok">● 서버 보관함 연결됨</span><span>PC·휴대폰 공유 · '+Object.keys(SV).length+'건 · 동기화 '+SLAST+'</span><button id="sbr">새로고침</button><button id="sbx">연결 해제</button>';
+else h='<span>서버 보관함 확인 중…</span>';
+e.innerHTML=h;const c=$('#sbc'),r=$('#sbr'),x=$('#sbx');
+if(c)c.onclick=()=>{const k=(prompt('보관함 열쇠를 입력하세요 (서버 설치 때 받은 값)')||'').trim();if(k){SKEY=k;LS.s('nts_sbkey',k);SST='';sbBar();sync(true)}};
+if(r)r.onclick=()=>sync();if(x)x.onclick=()=>{if(confirm('이 기기의 서버 연결을 해제할까요? (서버 보관함 내용은 그대로 남습니다)')){SKEY='';LS.s('nts_sbkey','');SST='';sbBar()}}}
+function queue(op){SQ=SQ.filter(q=>!(q.id==op.id&&(op.a!='memo'||q.a=='memo')));SQ.push(op);LS.s('nts_sbq',SQ);flush()}
+let FL=false;async function flush(){if(!SKEY||FL)return;FL=true;try{while(SQ.length){const q=SQ[0];
+if(q.a=='put')await api('/put',{id:q.id,item:q.item});else if(q.a=='del')await api('/del',{id:q.id});else if(q.a=='memo')await api('/memo',{id:q.id,memo:q.memo});
+SQ.shift();LS.s('nts_sbq',SQ)}if(SST!='ok'){SST='ok';SLAST=new Date().toTimeString().slice(0,5)}}catch(e){if(SST!='key')SST='off'}FL=false;sbBar()}
+async function sync(first){if(!SKEY){sbBar();return}try{
+if(!LS.g('nts_sbinit',false)){const loc=Object.values(SV);const j=await api('/bulk',{items:loc});LS.s('nts_sbinit',true);if(loc.length)toast('이 기기 보관함 '+loc.length+'건을 서버와 합쳤습니다')}
+await flush();if(SST=='key')throw 0;const j=await api('/list');const n={};j.items.forEach(x=>{n[x.id]=x});
+SQ.forEach(q=>{if(q.a=='put')n[q.id]=Object.assign({},q.item,{id:q.id});if(q.a=='del')delete n[q.id];if(q.a=='memo'&&n[q.id])n[q.id].memo=q.memo});
+SV=n;keep();SST='ok';SLAST=new Date().toTimeString().slice(0,5)}catch(e){if(SST!='key')SST='off'}
+counts();sbBar();if(!document.activeElement||!document.activeElement.classList.contains('memo'))draw()}
+const MT={};function memoLater(id,v){clearTimeout(MT[id]);MT[id]=setTimeout(()=>queue({a:'memo',id:id,memo:v}),800)}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',1800)}
 function txt(x){return '['+x.type+'] '+(x.no||'')+' (등록 '+(x.reg||'')+')\n'+x.t+'\n\n요지: '+(x.g||'')+(x.o?'\n\n주문: '+x.o:'')+(x.f?'\n\n사실관계: '+x.f:'')+(x.q?'\n\n질의내용: '+x.q:'')+(x.r?'\n\n회신: '+x.r.slice(0,800)+(x.r.length>800?' …':''):'')+(SV[x.id]&&SV[x.id].memo?'\n\n메모: '+SV[x.id].memo:'')+'\n\n원문: '+(LINK(x)||'https://taxlaw.nts.go.kr')}
 function copy(s){if(navigator.clipboard)navigator.clipboard.writeText(s).then(()=>toast('복사했습니다'),()=>toast('복사 실패'));else toast('복사 실패')}
@@ -395,18 +423,19 @@ h+='<div class="row" data-i="'+i+'"><div class="top"><span class="ty" style="bac
 $('#list').innerHTML=h||'<div class="none">'+(K=='prec'&&!D.some(x=>x.kind=='prec')?'판례·결정례는 호출 주소 확인 후 표시됩니다':'해당 자료 없음')+'</div>';
 const R=rows;document.querySelectorAll('.row').forEach(r=>{const x=R[+r.dataset.i];r.onclick=e=>{if(e.target.closest('.acts,.memo,details'))return;r.classList.toggle('open')};
 r.querySelectorAll('.acts button').forEach(b=>b.onclick=e=>{e.stopPropagation();const a=b.dataset.a;
-if(a=='save'){if(SV[x.id]){delete SV[x.id];toast('보관 해제')}else{SV[x.id]=Object.assign({},x,{x:'',savedAt:TODAY,memo:''});toast('보관함에 저장')}keep();counts();const o=r.classList.contains('open');draw();const n=document.querySelector('.row[data-i="'+r.dataset.i+'"]');if(o&&n&&K!='saved')n.classList.add('open')}
+if(a=='save'){if(SV[x.id]){delete SV[x.id];queue({a:'del',id:x.id});toast('보관 해제')}else{SV[x.id]=Object.assign({},x,{x:'',savedAt:TODAY,memo:''});queue({a:'put',id:x.id,item:SV[x.id]});toast(SKEY?'보관함에 저장 (PC·휴대폰 공유)':'이 기기 보관함에 저장')}keep();counts();const o=r.classList.contains('open');draw();const n=document.querySelector('.row[data-i="'+r.dataset.i+'"]');if(o&&n&&K!='saved')n.classList.add('open')}
 if(a=='share'){const s=txt(x);if(navigator.share)navigator.share({title:x.t,text:s}).catch(()=>{});else copy(s)}
 if(a=='copy')copy(txt(x));
 if(a=='open'){if(LINK(x))window.open(LINK(x),'_blank');else{copy(x.no||x.t);window.open('https://taxlaw.nts.go.kr/qt/USEQTJ001M.do','_blank')}}});
-const m=r.querySelector('.memo');if(m){m.onclick=e=>e.stopPropagation();m.oninput=()=>{SV[x.id].memo=m.value;keep()}}})}
+const m=r.querySelector('.memo');if(m){m.onclick=e=>e.stopPropagation();m.oninput=()=>{SV[x.id].memo=m.value;keep();memoLater(x.id,m.value)}}})}
 function dl(name,s,type){const b=new Blob([s],{type:type});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
 $('#csv').onclick=()=>{const q=v=>'"'+String(v||'').replace(/"/g,'""')+'"';const L=[['구분','유형','세목','문서번호','등록일','생산일','제목','요지','사실관계','질의내용','회신','메모','보관일','원문주소'].map(q).join(',')];
 Object.values(SV).forEach(x=>L.push([x.kind=='prec'?'판례':'해석례',x.type,x.tax,x.no,x.reg,x.prod,x.t,x.g,x.f,x.q,x.r,x.memo,x.savedAt,LINK(x)].map(q).join(',')));dl('보관함_'+TODAY+'.csv','\ufeff'+L.join('\r\n'),'text/csv')};
 $('#cpall').onclick=()=>copy(Object.values(SV).map(txt).join('\n\n────────\n\n'));
 document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{document.querySelectorAll('.chip').forEach(z=>z.classList.remove('on'));c.classList.add('on');P=+c.dataset.p;draw()});
 ['#q','#ty','#tx'].forEach(s=>$(s).oninput=draw);
-document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(z=>z.classList.remove('on'));t.classList.add('on');K=t.dataset.k;refill();draw()});draw();
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(z=>z.classList.remove('on'));t.classList.add('on');K=t.dataset.k;refill();sbBar();draw()});draw();sbBar();sync();
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState=='visible')sync()});window.addEventListener('online',()=>sync());
 </script></body></html>"""
 
 
@@ -415,7 +444,7 @@ def render(items, warn, run):
     w = "".join('<div class="warn">%s</div>' % html.escape(m) for m in warn)
     page = (PAGE.replace("__DATA__", json.dumps(items, ensure_ascii=False).replace("</", "<\\/"))
             .replace("__DAYS__", str(DAYS)).replace("__COUNT__", format(len(items), ","))
-            .replace("__RUN__", run).replace("__TODAY__", datetime.now().strftime("%Y-%m-%d")).replace("__WARN__", w))
+            .replace("__RUN__", run).replace("__SAVEBOX__", SAVEBOX).replace("__TODAY__", datetime.now().strftime("%Y-%m-%d")).replace("__WARN__", w))
     os.makedirs(os.path.dirname(OUT) or ".", exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(page)
