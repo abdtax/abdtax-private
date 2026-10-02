@@ -423,7 +423,7 @@ h+='<div class="row" data-i="'+i+'"><div class="top"><span class="ty" style="bac
 $('#list').innerHTML=h||'<div class="none">'+(K=='prec'&&!D.some(x=>x.kind=='prec')?'판례·결정례는 호출 주소 확인 후 표시됩니다':'해당 자료 없음')+'</div>';
 const R=rows;document.querySelectorAll('.row').forEach(r=>{const x=R[+r.dataset.i];r.onclick=e=>{if(e.target.closest('.acts,.memo,details'))return;r.classList.toggle('open')};
 r.querySelectorAll('.acts button').forEach(b=>b.onclick=e=>{e.stopPropagation();const a=b.dataset.a;
-if(a=='save'){if(SV[x.id]){delete SV[x.id];queue({a:'del',id:x.id});toast('보관 해제')}else{SV[x.id]=Object.assign({},x,{x:'',savedAt:TODAY,memo:''});queue({a:'put',id:x.id,item:SV[x.id]});toast(SKEY?'보관함에 저장 (PC·휴대폰 공유)':'이 기기 보관함에 저장')}keep();counts();const o=r.classList.contains('open');draw();const n=document.querySelector('.row[data-i="'+r.dataset.i+'"]');if(o&&n&&K!='saved')n.classList.add('open')}
+if(a=='save'){if(SV[x.id]){if(!confirm('보관을 해제할까요?\n\n['+(x.no||x.t)+']\n\n해제하면 PC·휴대폰 보관함에서 모두 빠지고, 이 문서에 쓴 메모도 보관함에서 사라집니다.'))return;delete SV[x.id];queue({a:'del',id:x.id});toast('보관 해제')}else{SV[x.id]=Object.assign({},x,{x:'',savedAt:TODAY,memo:''});queue({a:'put',id:x.id,item:SV[x.id]});toast(SKEY?'보관함에 저장 (PC·휴대폰 공유)':'이 기기 보관함에 저장')}keep();counts();const o=r.classList.contains('open');draw();const n=document.querySelector('.row[data-i="'+r.dataset.i+'"]');if(o&&n&&K!='saved')n.classList.add('open')}
 if(a=='share'){const s=txt(x);if(navigator.share)navigator.share({title:x.t,text:s}).catch(()=>{});else copy(s)}
 if(a=='copy')copy(txt(x));
 if(a=='open'){if(LINK(x))window.open(LINK(x),'_blank');else{copy(x.no||x.t);window.open('https://taxlaw.nts.go.kr/qt/USEQTJ001M.do','_blank')}}});
