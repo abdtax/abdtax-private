@@ -27,6 +27,8 @@ OUT = os.path.join("site", "nts.html") if STATIC else "nts_watch.html"
 OUT_JS = os.path.join(os.path.dirname(OUT), "nts_detail.js")
 SAVEBOX = os.environ.get("SAVEBOX_URL", "https://13-125-115-202.sslip.io/savebox")   # 보관함 서버 (PC·휴대폰 공유)
 DATE_FMTS = ["%Y%m%d", "%Y-%m-%d", "%Y.%m.%d"]
+BUDGET = int(os.environ.get("NTS_BUDGET", "360"))   # 한 번 실행 최대 시간(초). 넘으면 받은 것까지만 화면 생성
+DEADLINE = time.time() + BUDGET
 
 
 # ---------------------------------------------------------------- 사이트 접속
@@ -35,29 +37,40 @@ class Client:
         self.op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
         self.op.addheaders = [("User-Agent", UA), ("X-Requested-With", "XMLHttpRequest"),
                               ("Referer", BASE + "/qt/USEQTA001M.do")]
+        self.last, self.fails, self.down = 0, 0, False
         try:
             self.op.open(BASE + "/qt/USEQTA001M.do?ntstDcmClCd=02", timeout=30).read()
         except Exception:
             pass
-        self.last = 0
 
     def action(self, aid, param):
         wait = DELAY * random.uniform(0.9, 1.3) - (time.time() - self.last)
         if wait > 0:
             time.sleep(wait)
+        if self.down:
+            raise RuntimeError("사이트 응답 없음 (연속 실패로 이번 실행은 중단)")
+        if time.time() > DEADLINE:
+            raise RuntimeError("실행 시간 %d분 초과 (나머지는 다음 실행 때)" % (BUDGET // 60))
         body = urllib.parse.urlencode({"actionId": aid, "paramData": json.dumps(param, ensure_ascii=False)}).encode()
         err = None
-        for i in range(3):
+        for i in range(2):
             try:
-                r = self.op.open(BASE + "/action.do", data=body, timeout=60)
+                left = max(5, min(30, DEADLINE - time.time()))
+                r = self.op.open(BASE + "/action.do", data=body, timeout=left)
                 self.last = time.time()
                 d = json.loads(r.read().decode("utf-8"))
                 if d.get("status") == "SUCCESS":
+                    self.fails = 0
                     return d["data"][aid]
                 err = "응답 상태 %s" % d.get("status")
             except Exception as e:
                 err = str(e)[:120]
-            time.sleep(5 * (i + 1))
+            if time.time() > DEADLINE:
+                break
+            time.sleep(3)
+        self.fails += 1
+        if self.fails >= 3:
+            self.down = True       # 연속 3번 실패 = 사이트 장애로 보고 나머지 요청 생략
         raise RuntimeError(err)
 
 
