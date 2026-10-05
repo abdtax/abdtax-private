@@ -2,7 +2,8 @@ name: Blog Monitor
 
 on:
   schedule:
-    - cron: "17 * * * *"      # 매시 17분 (한국시간 기준 1시간마다)
+    - cron: "17 * * * *"      # 매시 17분
+    - cron: "47 * * * *"      # 매시 47분 (깃허브가 예약을 건너뛰는 경우 대비, 30분마다 실행)
   workflow_dispatch:           # Actions 화면에서 수동 실행 버튼
 
 permissions:
@@ -17,6 +18,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20        # 한 회차가 20분 넘게 걸리면 중단 (다음 회차 대기 방지)
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
@@ -57,6 +59,7 @@ jobs:
 
       - name: 국세법령정보시스템 새 해석례 확인
         continue-on-error: true      # 국세청 접속 실패해도 블로그 모니터는 정상 배포
+        timeout-minutes: 8           # 국세청 접속이 오래 걸리면 8분에서 중단하고 다음 단계 진행
         run: python nts_watch.py
 
       - name: 해석례 기록 저장
@@ -70,14 +73,16 @@ jobs:
 
       - name: 자동 실행 유지 (매월 1일, 60일 무활동 시 자동 중지 방지)
         run: |
-          if [ "$(date +%d)" = "01" ] && [ "$(date +%H)" = "03" ]; then
-            date > keepalive.txt
+          # 매월 1일 첫 실행 때 한 번만 기록 (시각이 밀리거나 건너뛰어도 그날 중 한 번은 실행됨)
+          if [ "$(date +%d)" = "01" ] && ! grep -q "$(date +%F)" keepalive.txt 2>/dev/null; then
+            date +"%F %T" > keepalive.txt
             git config user.name "blog-monitor"
             git config user.email "blog-monitor@users.noreply.github.com"
             git add keepalive.txt && git commit -m "keepalive" && git push || true
           fi
 
       - uses: actions/configure-pages@v5
+        continue-on-error: true      # 깃허브 내부 접속 지연(Connect Timeout)으로 실패해도 배포는 계속
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
